@@ -1,0 +1,178 @@
+# %%
+
+import pandas as pd
+import json
+import os
+import dotenv
+#from dotenv import load_dotenv("C:\\Users\\johnj\\secure_configs\\AgenticResearch\\.env", override=True)
+#import google.generativeai as genai
+# %%
+from google import genai
+from google.genai import types
+from google.genai.types import Tool, GenerateContentConfig, GoogleSearch
+from dotenv import load_dotenv
+
+load_dotenv("C:\\Users\\johnj\\secure_configs\\AgenticResearch\\.env", override=True)
+# %%
+# Set up the API key and endpoint
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+
+initial_query="""Preview today's ATP Hamburg match 
+                in tennis between Cam Norrie and Tomas Machac. 
+                Who is likely to win? 
+                What are recent results for each player? 
+                Who is favorite to win the tournament? 
+                How does this impact their potential for French Open
+                What is prize money at Atp Hamburg?
+                Could weather impact the match?
+                Are any players breaking records or achieving milestone?   """
+
+initial_query="""Preview the French Open men's singles tournament. 
+                Who are the favorites to win? 
+                Discuss Novak Djokovic, Carlos Alcaraz, and Jannik Sinner.
+                Who are interesting long shots? 
+                Do any American players have a chance?
+                When is the draw? What is the prize money?
+                Who is defending champion?  
+                Is the weather good for the first week of the tournament?
+                Could any players achieve special milestones?
+                Who are the wildcards?
+                Will Rafael Nadal be honored at the tournament?
+                What is the potential impact of the new Roland Garros roof?"""
+
+
+
+
+news_prompt = f"""You are a news editor. Review the initial query: "{initial_query}"
+    Read each row's Title and body into one article. Synergize into a summary, 
+    capturing the most interesting points relevant to the initial_query.
+    Present the summary as a short news article with 3-4 bullet points followed by a 150-200 word summary.
+    Include a link to the source article and a list of follow-up questions that could be asked based on the summary.
+    The summary should be concise and engaging, suitable for a news article.')
+"""
+# %%
+print(news_prompt)
+# %%
+
+
+# %%
+client = genai.Client(
+    api_key='AIzaSyBPkpaWElfhKHQN4AgMTkcj6hxpUP-DQH4',
+#    location='us-central1',
+    http_options=types.HttpOptions(api_version='v1alpha')
+    #http_options=types.HttpOptions(api_version='v1')
+)
+
+google_search_tool = Tool(
+    google_search = GoogleSearch()
+)
+# %% 
+
+
+response = client.models.generate_content(
+    model='gemini-2.5-pro-preview-05-06', 
+    #contents=writer_prompt, 
+    contents=news_prompt, 
+    config=GenerateContentConfig(
+        tools=[google_search_tool],
+        response_modalities=["TEXT"],
+    )    
+)
+print(response.text)
+
+
+
+# %%
+
+for each in response.candidates[0].content.parts:
+    print(each.text)
+# Example response:
+# The next total solar eclipse visible in the contiguous United States will be on ...
+
+# To get grounding metadata as web content. This also includes Search Suggestions
+print(response.candidates[0].grounding_metadata.search_entry_point.rendered_content)
+
+# %%
+#load this to an html file and open in browser
+#create html file with the response text    
+
+import markdown2
+import datetime
+
+def render_html_response(response_text, html_file="news_response.html"):
+    # Try to detect if response is JSON
+    import json
+    is_json = False
+    pretty_json = None
+    try:
+        pretty_json = json.dumps(json.loads(response_text), indent=2)
+        is_json = True
+    except Exception:
+        pass
+    # Try to detect if response is Markdown
+    is_markdown = False
+    html_body = ""
+    try:
+        html_body = markdown2.markdown(response_text)
+        is_markdown = True
+    except Exception:
+        html_body = response_text
+    # Remove content before the first headline (e.g., first line starting with #)
+    import re
+    headline_match = re.search(r"^# .*$", response_text, re.MULTILINE)
+    if headline_match:
+        response_text = response_text[headline_match.start():]
+        # Re-render markdown if needed
+        try:
+            html_body = markdown2.markdown(response_text)
+            is_markdown = True
+        except Exception:
+            html_body = response_text
+    # Use a modern dark CSS style
+    css = '''
+    <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #181a1b; color: #e0e0e0; margin: 0; padding: 0; }
+    .container { max-width: 800px; margin: 40px auto; background: #23272a; border-radius: 10px; box-shadow: 0 2px 8px #0008; padding: 32px; }
+    h1, h2, h3, h4 { color: #8ab4f8; }
+    pre { background: #222; color: #e0e0e0; padding: 16px; border-radius: 6px; overflow-x: auto; }
+    a { color: #82aaff; }
+    ul, ol { margin-left: 2em; }
+    strong { color: #ffd700; }
+    </style>
+    '''
+    # Compose the HTML
+    if is_json:
+        body = f"<pre>{pretty_json}</pre>"
+    elif is_markdown:
+        body = html_body
+    else:
+        # Fallback: wrap plain text in <div>
+        body = f"<div style='white-space: pre-wrap;'>{response_text}</div>"
+    html = f"""
+    <html>
+    <head>
+    <meta charset='utf-8'>
+    <title>News Response</title>
+    {css}
+    </head>
+    <body><div class='container'>
+    {body}
+    </div></body></html>
+    """
+    with open(html_file, "w", encoding="utf-8") as f:
+        f.write(html)
+    # Save a timestamped copy
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    base, ext = os.path.splitext(html_file)
+    html_file_copy = f"{base}_{timestamp}{ext}"
+    with open(html_file_copy, "w", encoding="utf-8") as f:
+        f.write(html)
+    return html_file
+
+html_file = render_html_response(response.text, html_file="news_response.html")
+#open the html file in browser
+import webbrowser
+webbrowser.open(html_file)
+
+# %%
+# %%

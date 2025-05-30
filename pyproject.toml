@@ -1,0 +1,26 @@
+[project]
+name = "kickserve"
+version = "0.1.0"
+description = "Kickserve project with dependencies from requirements.txt"
+authors = [
+    { name = "John Ryle", email = "john@jryle.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "feedparser",
+    "pandas",
+    "google-auth",
+    "google-auth-oauthlib",
+    "google-auth-httplib2",
+    "google-api-python-client",
+    "google-genai",
+    "tabulate",
+    "dotenv>=0.9.9",
+    "markdown2>=2.5.3",
+]
+
+[tool.setuptools]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"

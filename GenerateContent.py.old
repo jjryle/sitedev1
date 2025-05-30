@@ -1,0 +1,141 @@
+# %%
+
+import pandas as pd
+import json
+import os
+import dotenv
+from google import genai
+from google.genai import types
+from google.genai.types import Tool, GenerateContentConfig, GoogleSearch
+from dotenv import load_dotenv
+
+class NewsContentGenerator:
+    def __init__(self, env_path, blog_id, html_file="news_response.html"):
+        from dotenv import load_dotenv
+        load_dotenv(env_path, override=True)
+        self.GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+        self.blog_id = blog_id
+        self.html_file = html_file
+        self.client = self._init_genai_client()
+        self.google_search_tool = self._init_google_search_tool()
+
+    def _init_genai_client(self):
+        from google import genai
+        from google.genai import types
+        return genai.Client(
+            api_key=self.GOOGLE_API_KEY,
+            http_options=types.HttpOptions(api_version='v1alpha')
+        )
+
+    def _init_google_search_tool(self):
+        from google.genai.types import Tool, GoogleSearch
+        return Tool(google_search=GoogleSearch())
+
+    def build_news_prompt(self, initial_query):
+        return f"""You are a news editor. Review the initial query: "{initial_query}"
+    Read each row's Title and body into one article. Synergize into a summary, 
+    capturing the most interesting points relevant to the initial_query.
+    Present the summary as a short news article with 3-4 bullet points followed by a 150-200 word summary.
+    Include a link to the source article and a list of follow-up questions that could be asked based on the summary.
+    The summary should be concise and engaging, suitable for a news article.')
+"""
+
+    def generate_content(self, news_prompt):
+        from google.genai import types, GenerateContentConfig
+        response = self.client.models.generate_content(
+            model='gemini-2.5-pro-preview-05-06',
+            contents=news_prompt,
+            config=GenerateContentConfig(
+                tools=[self.google_search_tool],
+                response_modalities=["TEXT"],
+            )
+        )
+        return response
+
+    def print_response(self, response):
+        print(response.text)
+        for each in response.candidates[0].content.parts:
+            print(each.text)
+        print(response.candidates[0].grounding_metadata.search_entry_point.rendered_content)
+
+    def render_html_response(self, response_text):
+        import markdown2
+        import datetime
+        import json
+        import re
+        is_json = False
+        pretty_json = None
+        try:
+            pretty_json = json.dumps(json.loads(response_text), indent=2)
+            is_json = True
+        except Exception:
+            pass
+        is_markdown = False
+        html_body = ""
+        try:
+            html_body = markdown2.markdown(response_text)
+            is_markdown = True
+        except Exception:
+            html_body = response_text
+        # Remove content before the first headline (e.g., first line starting with #)
+        headline_match = re.search(r"^# .*$", response_text, re.MULTILINE)
+        if headline_match:
+            response_text = response_text[headline_match.start():]
+            try:
+                html_body = markdown2.markdown(response_text)
+                is_markdown = True
+            except Exception:
+                html_body = response_text
+        css = '''
+        <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #f9f9f9; color: #222; margin: 0; padding: 0; }
+        .container { max-width: 800px; margin: 40px auto; background: #fff; border-radius: 10px; box-shadow: 0 2px 8px #0001; padding: 32px; }
+        h1, h2, h3, h4 { color: #2a4d8f; }
+        pre { background: #f4f4f4; padding: 16px; border-radius: 6px; overflow-x: auto; }
+        a { color: #1a73e8; }
+        ul, ol { margin-left: 2em; }
+        </style>
+        '''
+        if is_json:
+            body = f"<pre>{pretty_json}</pre>"
+        elif is_markdown:
+            body = html_body
+        else:
+            body = f"<div style='white-space: pre-wrap;'>{response_text}</div>"
+        html = f"""
+        <html>
+        <head>
+        <meta charset='utf-8'>
+        <title>News Response</title>
+        {css}
+        </head>
+        <body><div class='container'>
+        {body}
+        </div></body></html>
+        """
+        with open(self.html_file, "w", encoding="utf-8") as f:
+            f.write(html)
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        base, ext = os.path.splitext(self.html_file)
+        html_file_copy = f"{base}_{timestamp}{ext}"
+        with open(html_file_copy, "w", encoding="utf-8") as f:
+            f.write(html)
+        return self.html_file
+
+# Example usage:
+if __name__ == "__main__":
+    import json
+    config_path = "config.json"
+    with open(config_path, "r", encoding="utf-8") as f:
+        config = json.load(f)
+    env_path = "C:\\Users\\johnj\\secure_configs\\AgenticResearch\\.env"
+    blog_id = '6105657557377232887'
+    generator = NewsContentGenerator(env_path, blog_id)
+    initial_query = config["initial_query"]
+    news_prompt = generator.build_news_prompt(initial_query)
+    print(news_prompt)
+    response = generator.generate_content(news_prompt)
+    generator.print_response(response)
+    html_file = generator.render_html_response(response.text)
+    import webbrowser
+    webbrowser.open(html_file)
