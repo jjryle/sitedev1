@@ -9,8 +9,8 @@ from src.GenerateContent import NewsContentGenerator
 from src.publish_news_response import Publisher
 
 # Load environment variables
-env_path = os.getenv('ENV_PATH', r'C:\Users\johnj\secure_configs\AgenticResearch\.env')
-dotenv.load_dotenv(env_path)
+external_env_path = r'C:\Users\johnj\secure_configs\AgenticResearch\.env'
+dotenv.load_dotenv(external_env_path)
 
 # Get blog ID from environment
 BLOG_ID = os.getenv('JRYLE_BLOG_ID')
@@ -23,7 +23,7 @@ NEWS_HTML_PATH = "news_response.html"
 
 def run_generate_content():
     print("Generating content...")
-    generator = NewsContentGenerator(env_path, BLOG_ID, html_file=NEWS_HTML_PATH)
+    generator = NewsContentGenerator(external_env_path, BLOG_ID, html_file=NEWS_HTML_PATH)
     news_prompt = generator.build_news_prompt(config_settings.initial_query)
     print("Prompt:\n", news_prompt)
     response = generator.generate_content(news_prompt)

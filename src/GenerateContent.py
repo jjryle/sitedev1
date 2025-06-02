@@ -34,9 +34,12 @@ class NewsContentGenerator:
         from google.genai.types import Tool, GoogleSearch
         return Tool(google_search=GoogleSearch())
 
-    def build_news_prompt(self, initial_query):
-        return f"""You are a news editor. Review the initial query: \"{initial_query}\"\n    Read each row's Title and body into one article. Synergize into a summary, \n    capturing the most interesting points relevant to the initial_query.\n    Present the summary as a short news article with 3-4 bullet points followed\n    by a \"300\" - \"400\" word summary.\n    Include a link to the source article and a list of follow-up questions that could be asked based on the summary.\n    The summary should be concise and engaging, suitable for a news article."""
-    
+    #def build_news_prompt(self, initial_query):
+    #    return f"""You are a news editor. Review the initial query: \"{initial_query}\"\n    Read each row's Title and body into one article. Synergize into a summary, \n    capturing the most interesting points relevant to the initial_query.\n    Present the summary as a short news article with 3-4 bullet points followed\n    by a \"300\" - \"400\" word summary.\n    Include a link to the source article and a list of follow-up questions that could be asked based on the summary.\n    The summary should be concise and engaging, suitable for a news article."""
+    def build_news_prompt(self, blog_prompt_long):
+        return f"""{blog_prompt_long} """
+
+
     def generate_content(self, news_prompt):
         from google.genai import types
         

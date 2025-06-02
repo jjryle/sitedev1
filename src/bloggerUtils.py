@@ -19,11 +19,11 @@ class BloggerUtils:
     def get_blogger_service(self):
         credentials_path = r'C:\Users\johnj\secure_configs\AgenticResearch\jryle_credentials.json'
         if not os.path.exists(credentials_path):
-            print(f"Error: 'jryle_credentials.json' file not found at {credentials_path}.")
+            print(f"Error: 'credentials.json' file not found at {credentials_path}.")
             sys.exit(1)
         if not os.path.exists('credentials.dat'):
             flow = InstalledAppFlow.from_client_secrets_file(credentials_path, SCOPES)
-            credentials = flow.run_local_server()
+            credentials = flow.run_local_server(port=8081)
             with open('credentials.dat', 'wb') as credentials_dat:
                 pickle.dump(credentials, credentials_dat)
         else:
