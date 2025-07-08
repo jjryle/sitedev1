@@ -1,6 +1,6 @@
 # %%
-3 + 2
-# %%
+import dotenv
+
 import GenerateContent
 from GenerateContent import NewsContentGenerator
 
@@ -11,12 +11,19 @@ import config_settings
 env_path = config_settings.env_path
 
 dotenv.load_dotenv(env_path)
-blog_id = os.getenv('JRYLE_BLOG_ID')
+blog_id = os.getenv('KICKSERVE_BLOG_ID')
+# %%
 
-
+# ...existing code...
 news_content_generator = NewsContentGenerator(env_path, blog_id)
 
-get_content = news_content_generator.generate_content()
+# Build the news prompt using your config_settings
+news_prompt = news_content_generator.build_news_prompt(config_settings.initial_query)
+
+# Pass the prompt to generate_content
+get_content = news_content_generator.generate_content(news_prompt)
+# ...existing code...
+#get_content = news_content_generator.generate_content(news_prompt)
 
 
 
@@ -26,7 +33,9 @@ from datetime import datetime
 import os
 import dotenv
 
-gen_content = GenerateContent()
+news_prompt = news_content_generator.build_news_prompt(config_settings.initial_query)
+
+gen_content = GenerateContent(news_prompt, env_path, blog_id)
 #get_content = gen_content.get_news_response()
 
 # %%
@@ -34,10 +43,16 @@ gen_content = GenerateContent()
 
 env_path = "C:\\Users\\johnj\\secure_configs\\AgenticResearch\\.env"
 dotenv.load_dotenv(env_path)
-BLOG_ID = os.getenv('JRYLE_BLOG_ID')
+BLOG_ID = os.getenv('KICKSERVE_BLOG_ID')
 
 # %%
 
+import ftplib
+# %%
+ftp = ftplib.FTP()
+#ftp.connect("6.tcp.ngrok.io", 13008)
+ftp.connect("kick-serve.com", 13008)
+ftp.login("jryle", "alskdjf^%&$2930u42prj")
 
 
 

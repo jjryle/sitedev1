@@ -3,7 +3,7 @@
 A script to publish the generated news_response.html to the blog using bloggerUtils.create_blogger_post.
 """
 import dotenv 
-
+import datetime
 import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -16,7 +16,7 @@ dotenv.load_dotenv(env_path)
 
 
 dotenv.load_dotenv(env_path)
-blog_id = os.getenv('JRYLE_BLOG_ID')
+blog_id = os.getenv('KICKSERVE_BLOG_ID')
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from bloggerUtils import BloggerUtils
@@ -45,45 +45,60 @@ class Publisher:
 
     def publish(self):
         from src.bloggerUtils import BloggerUtils
+        print(f"[DEBUG] blog_id: {self.blog_id}")
+        print(f"[DEBUG] title: {self.title}")
+        print(f"[DEBUG] html_content (first 200 chars): {self.html_content[:200]}")
         blogger_utils = BloggerUtils()
         blogger_utils.create_blogger_post(self.blog_id, self.title, self.html_content)
         print(f"Published blog post: {self.title}")
 
-    def post_to_bluesky(self, handle, app_password):
+    @staticmethod
+    def post_to_bluesky(post_text, handle, app_password):
         """
-        Post the blog title and a link to the blog post to BlueSky.
-        Requires the bsky-sdk or requests library and BlueSky app password authentication.
+        Post the given text to BlueSky.
+        Requires the requests library and BlueSky app password authentication.
         """
         import requests
-        post_text = f"{self.title} - Read more: https://kicksrv.blogspot.com/"
         session = requests.Session()
-        resp = session.post(
-            "https://bsky.social/xrpc/com.atproto.server.createSession",
-            json={"identifier": handle, "password": app_password}
-        )
-        if resp.status_code != 200:
-            print("BlueSky login failed:", resp.text)
-            return False
-        access_jwt = resp.json().get("accessJwt")
+        try:
+            resp = session.post(
+                "https://bsky.social/xrpc/com.atproto.server.createSession",
+                json={"identifier": handle, "password": app_password},
+                timeout=10
+            )
+            resp.raise_for_status()
+        except requests.RequestException as e:
+            print(f"BlueSky login failed: {e}")
+            return False, f"BlueSky login failed: {e}"
+
+        session_data = resp.json()
+        access_jwt = session_data.get("accessJwt")
+
+        post_record = {
+            "$type": "app.bsky.feed.post",
+            "text": post_text,
+            "createdAt": datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z"),
+        }
+
         headers = {"Authorization": f"Bearer {access_jwt}"}
-        post_resp = session.post(
-            "https://bsky.social/xrpc/com.atproto.repo.createRecord",
-            headers=headers,
-            json={
-                "repo": handle,
-                "collection": "app.bsky.feed.post",
-                "record": {
-                    "$type": "app.bsky.feed.post",
-                    "text": post_text
-                }
-            }
-        )
-        if post_resp.status_code == 200:
-            print("Posted to BlueSky!")
-            return True
-        else:
-            print("Failed to post to BlueSky:", post_resp.text)
-            return False
+        try:
+            post_resp = session.post(
+                "https://bsky.social/xrpc/com.atproto.repo.createRecord",
+                headers=headers,
+                json={
+                    "repo": session_data.get("handle"),
+                    "collection": "app.bsky.feed.post",
+                    "record": post_record,
+                },
+                timeout=10
+            )
+            post_resp.raise_for_status()
+        except requests.RequestException as e:
+            print(f"Failed to post to BlueSky: {e}")
+            return False, f"Failed to post to BlueSky: {e}"
+
+        print("Posted to BlueSky!")
+        return True, "Posted to BlueSky!"
 
     def post_to_threads(self, username, password):
         """
@@ -96,10 +111,17 @@ class Publisher:
 
 # Example usage:
 if __name__ == "__main__":
+    import argparse
     print("This script is intended to be used as a module.")
     print("To publish content, run GenerateContent.py, which will then use this Publisher class.")
-    NEWS_HTML_PATH = "news_response.html" # No longer directly used by Publisher like this
+    parser = argparse.ArgumentParser(description="Publish a Blogger HTML file.")
+    parser.add_argument('--file', type=str, default=r"C:\AppAdmin\kickserve\news_response.html", help='Path to the HTML file to publish')
+    args = parser.parse_args()
+    NEWS_HTML_PATH = args.file
     # # To test Publisher directly, you'd need to provide sample blogger_content:
     # # sample_content = "<style>.my{color:red;}</style><div class='my'><h1>Test</h1><p>Content</p></div>"
+    publish_blog_id = os.getenv('KICKSERVE_BLOG_ID')
+    if not publish_blog_id:
+        raise ValueError("KICKSERVE_BLOG_ID environment variable is not set.")  
     publisher = Publisher(NEWS_HTML_PATH, blog_id)
     publisher.publish()

@@ -42,7 +42,9 @@ class NewsContentGenerator:
 
     def generate_content(self, news_prompt):
         from google.genai import types
-        
+        import datetime
+        output_dir = r'C:\AppAdmin\kickserve'
+        os.makedirs(output_dir, exist_ok=True)
         response = self.client.models.generate_content(
             model='gemini-2.5-pro-preview-05-06',
             contents=news_prompt,
@@ -51,6 +53,22 @@ class NewsContentGenerator:
                 response_modalities=["TEXT"],
             )
         )
+        # Extract a headline (first 10 words) from the response text
+        response_text = response.text.strip()
+        headline = ' '.join(response_text.split()[:10])
+        # Remove headline from body if it repeats at the start
+        body = response_text
+        if body.lower().startswith(headline.lower()):
+            body = body[len(headline):].lstrip(' ,\n')
+        md_file_path = os.path.join(output_dir, 'news_response.md')
+        with open(md_file_path, 'w', encoding='utf-8') as md_file:
+            md_file.write(f"# {headline}\n\n{body}\n")
+        # Also create a timestamped copy
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        base, ext = os.path.splitext('news_response.md')
+        md_file_copy = os.path.join(output_dir, f"news_response_{timestamp}{ext}")
+        with open(md_file_copy, 'w', encoding='utf-8') as md_file:
+            md_file.write(f"# {headline}\n\n{body}\n")
         return response
 
     def print_response(self, response):
@@ -66,38 +84,32 @@ class NewsContentGenerator:
             if search_entry_point and hasattr(search_entry_point, 'rendered_content'):
                 print(search_entry_point.rendered_content)
 
-    def render_html_response(self, response_text):
+    def render_html_response(self):
         import markdown2
         import datetime
-        import json
         import re
-        output_dir = r'C:\AppAdmin\jryle_publisher\data'
+        output_dir = r'C:\AppAdmin\kickserve'
         os.makedirs(output_dir, exist_ok=True)
-        is_json = False
-        response_text_for_processing = response_text # Use a copy for processing
-        pretty_json = None
-        try:
-            pretty_json = json.dumps(json.loads(response_text), indent=2)
-            is_json = True
-        except Exception:
-            pass
-        is_markdown = False
-        html_body = ""
+        md_file_path = os.path.join(output_dir, 'news_response.md')
+        with open(md_file_path, 'r', encoding='utf-8') as md_file:
+            response_text_for_processing = md_file.read()
+
+        # Extract the headline from the first markdown H1 (first line starting with # )
+        headline = None
+        h1_match = re.search(r"^# (.+)$", response_text_for_processing, re.MULTILINE)
+        if h1_match:
+            headline = h1_match.group(1).strip()
+            # Remove this H1 from the content to avoid duplication in HTML
+            response_text_for_processing = re.sub(r"^# .+$\n?", "", response_text_for_processing, count=1, flags=re.MULTILINE)
+        else:
+            # fallback: use first 8 words
+            headline = ' '.join(response_text_for_processing.strip().split()[:8]) + '...'
+
+        # Convert markdown to HTML (after headline removal)
         try:
             html_body = markdown2.markdown(response_text_for_processing)
-            is_markdown = True
         except Exception:
             html_body = response_text_for_processing
-
-        # Remove content before the first headline (e.g., first line starting with #)
-        headline_match = re.search(r"^# .*$", response_text_for_processing, re.MULTILINE)
-        if headline_match:
-            response_text_for_processing = response_text_for_processing[headline_match.start():]
-            try:
-                html_body = markdown2.markdown(response_text_for_processing)
-                is_markdown = True
-            except Exception:
-                html_body = response_text_for_processing
 
         # Define CSS specifically for the content block to be published
         content_specific_css = '''
@@ -148,74 +160,20 @@ class NewsContentGenerator:
         </style>
         '''
 
-        # Extract headline for <h1>, <h2>, and <title>
-        # <title>: SEO-friendly, short; <h1>: main headline; <h2>: subheadline
-        # Try markdown H1 and H2
-        headline = None
-        subheadline = None
-        # Markdown H1
-        h1_match = re.search(r"^# (.+)$", response_text_for_processing, re.MULTILINE)
-        if h1_match:
-            headline = h1_match.group(1).strip()
-            # Remove this H1 from the content to avoid duplication
-            response_text_for_processing = re.sub(r"^# .+$\n?", "", response_text_for_processing, count=1, flags=re.MULTILINE)
-        # Markdown H2
-        h2_match = re.search(r"^## (.+)$", response_text_for_processing, re.MULTILINE)
-        if h2_match:
-            subheadline = h2_match.group(1).strip()
-            # Remove this H2 from the content to avoid duplication
-            response_text_for_processing = re.sub(r"^## .+$\n?", "", response_text_for_processing, count=1, flags=re.MULTILINE)
-        # If not found, try HTML H1/H2 in generated HTML
-        if not headline:
-            html_h1_match = re.search(r"<h1[^>]*>(.*?)</h1>", html_body, re.IGNORECASE | re.DOTALL)
-            if html_h1_match:
-                headline = re.sub(r'<[^>]+>', '', html_h1_match.group(1)).strip()
-        if not subheadline:
-            html_h2_match = re.search(r"<h2[^>]*>(.*?)</h2>", html_body, re.IGNORECASE | re.DOTALL)
-            if html_h2_match:
-                subheadline = re.sub(r'<[^>]+>', '', html_h2_match.group(1)).strip()
-        # Fallbacks
-        if not headline:
-            headline = ' '.join(response_text_for_processing.strip().split()[:8]) + '...'
-        if not subheadline or subheadline == headline:
-            # Use next 10-18 words as subheadline, or a generic one
-            words = response_text_for_processing.strip().split()
-            subheadline = ' '.join(words[8:18]) if len(words) > 18 else 'Latest tennis news and analysis.'
-        # Title: even more concise, SEO-friendly, and never with markdown/HTML
-        title = ' '.join(response_text_for_processing.strip().split()[:6]) + '...'
-        # Clean up any markdown/HTML from title
-        title = re.sub(r'[\#<>/]', '', title).strip()
-        if title == headline or title == subheadline or not title:
-            title = f"Kickserve Tennis News {datetime.datetime.now().strftime('%Y-%m-%d')}"
-
-        # Re-render the content after removing headline/subheadline
-        try:
-            html_body = markdown2.markdown(response_text_for_processing)
-            is_markdown = True
-        except Exception:
-            html_body = response_text_for_processing
-        if is_json:
-            actual_content_html = f"<pre>{pretty_json}</pre>"
-        elif is_markdown:
-            actual_content_html = html_body
-        else:
-            actual_content_html = f"<div style='white-space: pre-wrap;'>{response_text_for_processing}</div>"
-
+        # Only include the headline as <title> and a single <h1> in the content
         self.blogger_ready_content = f"""
         {content_specific_css}
         <div class=\"gemini-generated-news-content\">
         <h1>{headline}</h1>
-        <h2>{subheadline}</h2>
-        {actual_content_html}
+        {html_body}
         </div>
         """
 
-        # For the local news_response.html file (for preview)
         local_preview_html = f"""
         <html>
         <head>
         <meta charset='utf-8'>
-        <title>{title}</title>
+        <title>{headline}</title>
         <style>body {{ font-family: sans-serif; background-color: #f0f0f0; margin: 20px; }}</style>
         </head>
         <body>
@@ -232,12 +190,6 @@ class NewsContentGenerator:
         with open(html_file_copy, "w", encoding="utf-8") as f:
             f.write(local_preview_html)
 
-        # Save JSON if possible
-        if is_json:
-            json_file_path = os.path.join(output_dir, f"{base}_{timestamp}.json")
-            with open(json_file_path, "w", encoding="utf-8") as jf:
-                jf.write(pretty_json)
-
         return html_file_path
 
 # Example usage:
@@ -246,9 +198,7 @@ if __name__ == "__main__":
     # Remove Publisher import and related logic
 
     env_path = "C:\\Users\\johnj\\secure_configs\\AgenticResearch\\.env"
-    #publish_blog_id = '5667239778780808602' #kicksrv
-    publish_blog_id = '6105657557377232887' #personal blog
-
+    publish_blog_id = os.getenv('KICKSERVE_BLOG_ID')
     initial_query = config_settings.initial_query
 
     generator = NewsContentGenerator(env_path, publish_blog_id)
@@ -258,7 +208,7 @@ if __name__ == "__main__":
     response = generator.generate_content(news_prompt)
     # generator.print_response(response) # Optional: for debugging
 
-    local_html_preview_file = generator.render_html_response(response.text)
+    local_html_preview_file = generator.render_html_response()
     print(f"Local preview saved to: {local_html_preview_file}")
     print("\nTo publish this content, use the publish_news_response.py script and provide the generated HTML file as input.")
 

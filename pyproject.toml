@@ -17,6 +17,9 @@ dependencies = [
     "tabulate",
     "dotenv>=0.9.9",
     "markdown2>=2.5.3",
+    "python-dotenv>=1.1.0",
+    "pyftpdlib>=2.0.1",
+    "streamlit>=1.45.1",
 ]
 
 [tool.setuptools]

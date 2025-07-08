@@ -13,7 +13,7 @@ external_env_path = r'C:\Users\johnj\secure_configs\AgenticResearch\.env'
 dotenv.load_dotenv(external_env_path)
 
 # Get blog ID from environment
-BLOG_ID = os.getenv('JRYLE_BLOG_ID')
+BLOG_ID = os.getenv('KICKSERVE_BLOG_ID')
 
 # Get initial query from config_settings
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))

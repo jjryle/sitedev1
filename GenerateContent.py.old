@@ -129,7 +129,6 @@ if __name__ == "__main__":
     with open(config_path, "r", encoding="utf-8") as f:
         config = json.load(f)
     env_path = "C:\\Users\\johnj\\secure_configs\\AgenticResearch\\.env"
-    blog_id = '6105657557377232887'
     generator = NewsContentGenerator(env_path, blog_id)
     initial_query = config["initial_query"]
     news_prompt = generator.build_news_prompt(initial_query)
